@@ -4,39 +4,208 @@
     <meta charset="UTF-8" />
     <title>Tab Discard Helper</title>
     <style>
-      body {
-        font-family: sans-serif;
-        width: 260px;
-        margin: 0;
-        padding: 1rem;
+      :root {
+        --bg: #f7f7f8;
+        --fg: #222;
+        --fg-muted: #666;
+        --border: #e0e0e0;
+        --button-bg: #fff;
+        --button-hover: #ededed;
+        --button-active: #e0e0e0;
+        --shadow: 0 2px 8px rgba(0, 0, 0, 0.04);
+        --radius: 10px;
       }
-      button {
+      html,
+      body {
+        background: var(--bg);
+        color: var(--fg);
+        font-family: "Inter", "Segoe UI", Arial, sans-serif;
+        margin: 0;
+        padding: 0;
         width: 100%;
-        margin: 0.4rem 0;
-        padding: 0.55rem;
-        font-size: 13px;
+        min-width: 220px;
+      }
+      body {
+        width: 240px;
+        min-height: 170px;
+        box-sizing: border-box;
+        padding: 0.8rem 0.8rem 0.6rem 0.8rem;
+        border-radius: var(--radius);
+        box-shadow: var(--shadow);
+        display: flex;
+        flex-direction: column;
+        align-items: stretch;
+        gap: 0.5rem;
       }
       #url {
-        font-size: 12px;
+        font-size: 11px;
+        color: var(--fg-muted);
         word-break: break-all;
-        margin-bottom: 0.6rem;
+        margin-bottom: 0.2rem;
+        text-align: left;
+        min-height: 1.1em;
+        white-space: nowrap;
+        overflow: hidden;
+        text-overflow: ellipsis;
+        max-width: 100%;
+      }
+      .actions-grid {
+        margin-top: 0.8rem;
+        display: grid;
+        grid-template-columns: 1fr 1fr;
+        grid-template-rows: 1fr 1fr;
+        gap: 0.3rem 0.5rem;
+        justify-items: center;
+        align-items: center;
+        margin-bottom: 0.1rem;
+      }
+      button.icon-btn {
+        background: var(--button-bg);
+        border: 1px solid var(--border);
+        border-radius: var(--radius);
+        box-shadow: none;
+        padding: 0.3rem 0.2rem 0.2rem 0.2rem;
+        width: 80px;
+        height: 54px;
+        display: flex;
+        flex-direction: column;
+        align-items: center;
+        justify-content: center;
+        cursor: pointer;
+        transition: background 0.15s, border 0.15s;
+        outline: none;
+        position: relative;
+      }
+      button.icon-btn:focus {
+        border-color: #888;
+        box-shadow: 0 0 0 2px #bbb;
+      }
+      button.icon-btn:hover {
+        background: var(--button-hover);
+      }
+      button.icon-btn:active {
+        background: var(--button-active);
+      }
+      button.icon-btn img {
+        display: block;
+        width: 22px;
+        height: 22px;
+        margin-bottom: 2px;
+        pointer-events: none;
+      }
+      .btn-label {
+        font-size: 11px;
+        color: var(--fg);
+        font-weight: 500;
+        line-height: 1.1;
+        text-align: center;
+        user-select: none;
+        pointer-events: none;
       }
       #info {
-        font-size: 11px;
-        color: #666;
-        height: 1.1rem;
+        font-size: 10px;
+        color: var(--fg-muted);
+        min-height: 1.1rem;
+        margin-top: 0.1rem;
+        text-align: left;
+      }
+      .settings-btn {
+        position: absolute;
+        right: 0px;
+        bottom: 0px;
+        width: 16px;
+        height: 16px;
+        opacity: 0.5;
+        display: flex;
+        border: none;
+        align-items: center;
+        justify-content: center;
+        cursor: pointer;
+        transition: background 0.15s, border 0.15s;
+        box-shadow: none;
+        z-index: 10;
+      }
+      .settings-btn:focus {
+        border-color: #888;
+        box-shadow: 0 0 0 2px #bbb;
+        outline: none;
+      }
+      .settings-btn:hover {
+        background: var(--button-hover);
+      }
+      .settings-btn img {
+        width: 22px;
+        height: 22px;
+        margin: 0;
+      }
+      .popup-container {
+        position: relative;
+        min-height: 170px;
       }
     </style>
   </head>
   <body>
-    <div id="url"></div>
-
-    <button id="discard">Discard Now</button>
-    <button id="permToggle"></button>
-    <button id="tempToggle"></button>
-    <button id="pauseToggle"></button>
-    <div id="info"></div>
-
+    <div class="popup-container">
+      <div id="url"></div>
+      <div class="actions-grid">
+        <button
+          id="discard"
+          class="icon-btn"
+          aria-label="Discard Tab"
+          title="Discard Tab"
+        >
+          <img id="discardIcon" src="icons/brush.svg" alt="" />
+          <span class="btn-label">Discard Tab</span>
+        </button>
+        <button
+          id="tempToggle"
+          class="icon-btn"
+          aria-label="Protect Tab"
+          title="Protect Tab"
+        >
+          <img id="tempIcon" src="icons/pin.svg" alt="" />
+          <span class="btn-label">Protect Tab</span>
+        </button>
+        <button
+          id="permToggle"
+          class="icon-btn"
+          aria-label="Add to Permanent Whitelist"
+          title="Add to Permanent Whitelist"
+        >
+          <img id="permIcon" src="icons/shield-plus.svg" alt="" />
+          <span class="btn-label">Whitelist Tab</span>
+        </button>
+        <button
+          id="pauseToggle"
+          class="icon-btn"
+          aria-label="Pause Auto Discard"
+          title="Pause Auto Discard"
+        >
+          <img
+            id="pauseIcon"
+            src="icons/octagon-pause.svg"
+            alt="Pause"
+            style="display: block; position: relative"
+          />
+          <img
+            id="resumeIcon"
+            src="icons/circle-play.svg"
+            alt="Resume"
+            style="display: none; position: absolute; top: 6px; left: 29px"
+          />
+          <span class="btn-label" id="pauseLabel">Pause Auto Discard</span>
+        </button>
+      </div>
+      <button
+        id="settingsBtn"
+        class="settings-btn"
+        aria-label="Settings"
+        title="Settings"
+      >
+        <img src="icons/settings.svg" alt="Settings" />
+      </button>
+      <div id="info"></div>
+    </div>
     <script src="popup.js"></script>
   </body>
 </html>

@@ -5,6 +5,9 @@ const MAX_THUMBNAILS = 50; // Limit to prevent storage issues
 
 let userHasInteracted = false; // Set to true after popup or shortcut is used
 
+// Key for storing previous tab info
+const PREV_TAB_KEY = "tabOverview_prevTab";
+
 /* --- keep a fresh thumbnail for the active tab ------------------------ */
 async function capture(tabId, windowId) {
   if (!userHasInteracted) {
@@ -179,6 +182,10 @@ async function openOrFocusOverview() {
     currentWindow: true,
   });
   if (current) {
+    // Store previous tab info in storage
+    await chrome.storage.local.set({
+      [PREV_TAB_KEY]: { id: current.id, windowId: current.windowId },
+    });
     // 3️⃣ Take one shot at capturing it
     try {
       await capture(current.id, current.windowId);
@@ -210,7 +217,29 @@ chrome.commands.onCommand.addListener((cmd) => {
   if (cmd === "open-overview") openOrFocusOverview();
 });
 
-chrome.action.onClicked.addListener(() => openOrFocusOverview());
+chrome.action.onClicked.addListener(async () => {
+  const overviewURL = chrome.runtime.getURL("overview.html");
+  const [overviewTab] = await chrome.tabs.query({ url: overviewURL });
+  if (overviewTab) {
+    // Check if overview tab is focused and active
+    const win = await chrome.windows.get(overviewTab.windowId);
+    if (win.focused && overviewTab.active) {
+      // Try to switch back to the previous tab
+      const prev = (await chrome.storage.local.get(PREV_TAB_KEY))[PREV_TAB_KEY];
+      if (prev && prev.id !== overviewTab.id) {
+        try {
+          await chrome.tabs.update(prev.id, { active: true });
+          await chrome.windows.update(prev.windowId, { focused: true });
+          return;
+        } catch (e) {
+          // Tab may have been closed; fallback to opening overview
+        }
+      }
+    }
+  }
+  // Default: open or focus overview
+  openOrFocusOverview();
+});
 
 // helper: schedule capture with a slight delay -----------------------
 function scheduleCapture(tabId, windowId, delay = 250) {

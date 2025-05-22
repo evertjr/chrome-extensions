@@ -8,13 +8,13 @@
   urlEl.textContent = url;
 
   /* ask background for status */
-  const status = await chrome.runtime.sendMessage({
+  let status = await chrome.runtime.sendMessage({
     cmd: "getStatus",
     tabId: tab.id,
     url,
   });
 
-  render(status); // initial button labels
+  render(status); // initial button labels/icons
 
   /* ----- button actions ----- */
   id("discard").onclick = async () => {
@@ -36,7 +36,8 @@
       : [...whitelist, host];
 
     await chrome.storage.sync.set({ whitelist: newList });
-    render({ ...status, permanentlyWhitelisted: !isOn });
+    status = { ...status, permanentlyWhitelisted: !isOn };
+    render(status);
   };
 
   id("tempToggle").onclick = async () => {
@@ -44,27 +45,78 @@
       cmd: "toggleTempWhitelist",
       tabId: tab.id,
     });
-    render({ ...status, tempWhitelisted: res.tempWhitelisted });
+    status = { ...status, tempWhitelisted: res.tempWhitelisted };
+    render(status);
   };
 
   id("pauseToggle").onclick = async () => {
     const res = await chrome.runtime.sendMessage({ cmd: "togglePause" });
-    render({ ...status, paused: res.paused });
+    status = { ...status, paused: res.paused };
+    render(status);
+  };
+
+  id("settingsBtn").onclick = () => {
+    if (chrome.runtime.openOptionsPage) {
+      chrome.runtime.openOptionsPage();
+    } else {
+      window.open(chrome.runtime.getURL("options.html"));
+    }
   };
 
   /* ----- helpers ----- */
   function render(st) {
-    id("permToggle").textContent = st.permanentlyWhitelisted
-      ? "Remove from Permanent Whitelist"
-      : "Add to Permanent Whitelist";
+    // Permanent Whitelist Button
+    const permBtn = id("permToggle");
+    const permIcon = id("permIcon");
+    const permLabel = permBtn.querySelector(".btn-label");
+    if (st.permanentlyWhitelisted) {
+      permBtn.setAttribute("aria-label", "Remove from Permanent Whitelist");
+      permBtn.setAttribute("title", "Remove from Permanent Whitelist");
+      permIcon.style.filter = "grayscale(0) brightness(0.7)";
+      permLabel.textContent = "Whitelist Tab";
+    } else {
+      permBtn.setAttribute("aria-label", "Add to Permanent Whitelist");
+      permBtn.setAttribute("title", "Add to Permanent Whitelist");
+      permIcon.style.filter = "none";
+      permLabel.textContent = "Whitelist Tab";
+    }
 
-    id("tempToggle").textContent = st.tempWhitelisted
-      ? "Remove Temporary Protection"
-      : "Temporarily Protect This Tab";
+    // Temporary Whitelist Button (Protect Tab)
+    const tempBtn = id("tempToggle");
+    const tempIcon = id("tempIcon");
+    const tempLabel = tempBtn.querySelector(".btn-label");
+    if (st.tempWhitelisted) {
+      tempBtn.setAttribute("aria-label", "Remove Temporary Protection");
+      tempBtn.setAttribute("title", "Remove Temporary Protection");
+      tempIcon.style.filter = "grayscale(0) brightness(0.7)";
+      tempLabel.textContent = "Protect Tab";
+    } else {
+      tempBtn.setAttribute("aria-label", "Protect Tab");
+      tempBtn.setAttribute("title", "Protect Tab");
+      tempIcon.style.filter = "none";
+      tempLabel.textContent = "Protect Tab";
+    }
 
-    id("pauseToggle").textContent = st.paused
-      ? "Resume Auto-Discard"
-      : "Pause Auto-Discard";
+    // Pause/Resume Button
+    const pauseBtn = id("pauseToggle");
+    const pauseIcon = id("pauseIcon");
+    const resumeIcon = id("resumeIcon");
+    const pauseLabel = id("pauseLabel");
+    if (st.paused) {
+      pauseBtn.setAttribute("aria-label", "Resume Auto Discard");
+      pauseBtn.setAttribute("title", "Resume Auto Discard");
+      pauseIcon.style.display = "none";
+      resumeIcon.style.display = "block";
+      pauseLabel.textContent = "Resume Auto Discard";
+      pauseIcon.style.filter = "grayscale(0) brightness(0.7)";
+    } else {
+      pauseBtn.setAttribute("aria-label", "Pause Auto Discard");
+      pauseBtn.setAttribute("title", "Pause Auto Discard");
+      pauseIcon.style.display = "block";
+      resumeIcon.style.display = "none";
+      pauseLabel.textContent = "Pause Auto Discard";
+      pauseIcon.style.filter = "none";
+    }
 
     show(
       st.paused
@@ -73,7 +125,6 @@
         ? "This tab is protected until closed."
         : ""
     );
-    Object.assign(status, st); // keep local copy up-to-date
   }
 
   function show(text) {

@@ -1,7 +1,7 @@
 {
   "name": "Tab Discard Helper",
   "description": "Automatically discards unused tabs after a configurable idle time, with manual control and a whitelist.",
-  "version": "1.1",
+  "version": "1.0",
   "manifest_version": 3,
   "permissions": ["tabs", "storage", "alarms"],
   "background": {
@@ -10,6 +10,12 @@
   "action": {
     "default_title": "Tab Discard Helper",
     "default_popup": "popup.html"
+  },
+  "icons": {
+    "16": "icon.png",
+    "32": "icon.png",
+    "48": "icon.png",
+    "128": "icon.png"
   },
   "options_page": "options.html"
 }

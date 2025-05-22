@@ -4,46 +4,129 @@
     <meta charset="UTF-8" />
     <title>Tab Discard Helper – Options</title>
     <style>
+      :root {
+        --bg: #f7f7f8;
+        --fg: #222;
+        --fg-muted: #666;
+        --border: #e0e0e0;
+        --input-bg: #fff;
+        --input-focus: #ededed;
+        --radius: 10px;
+        --shadow: 0 2px 8px rgba(0, 0, 0, 0.04);
+      }
+      html,
       body {
-        font-family: sans-serif;
-        max-width: 500px;
-        margin: 2rem auto;
+        background: var(--bg);
+        color: var(--fg);
+        font-family: "Inter", "Segoe UI", Arial, sans-serif;
+        margin: 0;
+        padding: 0;
+        width: 100%;
+      }
+      body {
+        max-width: 420px;
+        margin: 2.5rem auto 0 auto;
+        padding: 2rem 1.5rem 1.5rem 1.5rem;
+        border-radius: var(--radius);
+        box-shadow: var(--shadow);
+        background: var(--bg);
+        display: flex;
+        flex-direction: column;
+        gap: 1.2rem;
+      }
+      h1 {
+        font-size: 1.25rem;
+        font-weight: 600;
+        margin: 0 0 0.5rem 0;
+        color: var(--fg);
+        letter-spacing: -0.5px;
       }
       label {
         display: block;
-        margin-top: 1rem;
-        font-weight: bold;
+        margin-top: 1.1rem;
+        font-weight: 500;
+        color: var(--fg);
+        font-size: 1rem;
       }
+      input[type="number"],
       textarea {
         width: 100%;
-        min-height: 8rem;
+        margin-top: 0.4rem;
+        font-size: 1rem;
+        padding: 0.5rem 0.7rem;
+        border: 1px solid var(--border);
+        border-radius: var(--radius);
+        background: var(--input-bg);
+        color: var(--fg);
+        box-sizing: border-box;
+        transition: border 0.15s, background 0.15s;
+        font-family: inherit;
+        resize: none;
+      }
+      input[type="number"]:focus,
+      textarea:focus {
+        outline: none;
+        border-color: #bbb;
+        background: var(--input-focus);
+      }
+      textarea {
+        min-height: 7rem;
+        font-size: 0.98rem;
+      }
+      small {
+        color: var(--fg-muted);
+        font-size: 0.92em;
       }
       button {
         margin-top: 1.5rem;
-        padding: 0.5rem 1rem;
+        padding: 0.6rem 1.5rem;
         font-size: 1rem;
+        font-weight: 500;
+        color: var(--fg);
+        background: var(--input-bg);
+        border: 1px solid var(--border);
+        border-radius: var(--radius);
+        cursor: pointer;
+        transition: background 0.15s, border 0.15s;
+        box-shadow: none;
+      }
+      button:focus {
+        border-color: #888;
+        box-shadow: 0 0 0 2px #bbb;
+        outline: none;
+      }
+      button:hover {
+        background: var(--input-focus);
+      }
+      #status {
+        margin-left: 1.2rem;
+        font-size: 0.98em;
+        color: var(--fg-muted);
+        vertical-align: middle;
       }
     </style>
   </head>
   <body>
     <h1>Tab Discard Helper – Settings</h1>
 
-    <label>
+    <label for="idleMinutes">
       Idle time before discarding (minutes):
       <input type="number" id="idleMinutes" min="1" />
     </label>
 
-    <label>
+    <label for="whitelist">
       Whitelist (one entry per line)<br />
-      <small
-        >Example: <code>github.com</code> or
-        <code>https://mail.google.com/</code></small
-      >
+      <small>
+        Example: <code>github.com</code> or
+        <code>https://mail.google.com/</code>
+      </small>
       <textarea id="whitelist"></textarea>
     </label>
 
-    <button id="save">Save</button>
-    <span id="status" style="margin-left: 1rem"></span>
+    <div style="display: flex; align-items: center">
+      <button id="save">Save</button>
+      <span id="status"></span>
+    </div>
 
     <script src="options.js"></script>
   </body>
