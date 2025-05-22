@@ -163,7 +163,19 @@
           aria-label="Protect Tab"
           title="Protect Tab"
         >
-          <img id="tempIcon" src="icons/pin.svg" alt="" />
+          <!-- pin is for protect, pin-off is for unprotect -->
+          <img
+            id="tempIcon"
+            src="icons/pin.svg"
+            alt=""
+            style="display: block"
+          />
+          <img
+            id="tempIconOff"
+            src="icons/pin-off.svg"
+            alt=""
+            style="display: none"
+          />
           <span class="btn-label">Protect Tab</span>
         </button>
         <button
@@ -218,6 +230,6 @@
       </button>
       <div id="info"></div>
     </div>
-    <script src="popup.js"></script>
+    <script type="module" src="popup.js"></script>
   </body>
 </html>

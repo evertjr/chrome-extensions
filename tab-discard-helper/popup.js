@@ -1,3 +1,5 @@
+import { getLocalizedText } from "./i18n.js";
+
 (async () => {
   // Get the active tab in the current window
   const [tab] = await chrome.tabs.query({ active: true, currentWindow: true });
@@ -20,7 +22,7 @@
       await chrome.tabs.discard(tab.id);
       window.close();
     } catch {
-      show("Cannot discard this tab.");
+      show({ text: getLocalizedText("cannotDiscard"), margin: 0.1 });
     }
   };
 
@@ -51,6 +53,8 @@
     render(status);
   };
 
+  id("settingsBtn").setAttribute("aria-label", getLocalizedText("settings"));
+  id("settingsBtn").setAttribute("title", getLocalizedText("settings"));
   id("settingsBtn").onclick = () => {
     if (chrome.runtime.openOptionsPage) {
       chrome.runtime.openOptionsPage();
@@ -64,38 +68,47 @@
    * @param {Object} st - Status object
    */
   function render(st) {
+    // Discard Button
+    const discardBtn = id("discard");
+    const discardLabel = discardBtn.querySelector(".btn-label");
+    discardBtn.setAttribute("aria-label", getLocalizedText("discard"));
+    discardBtn.setAttribute("title", getLocalizedText("discard"));
+    discardLabel.textContent = getLocalizedText("discard");
     // Permanent Whitelist Button
     const permBtn = id("permToggle");
     const permIcon = id("permIcon");
     const permIconMinus = id("permIconMinus");
     const permLabel = permBtn.querySelector(".btn-label");
     if (st.permanentlyWhitelisted) {
-      permBtn.setAttribute("aria-label", "Remove from Permanent Whitelist");
-      permBtn.setAttribute("title", "Remove from Permanent Whitelist");
+      permBtn.setAttribute("aria-label", getLocalizedText("unwhitelist"));
+      permBtn.setAttribute("title", getLocalizedText("unwhitelist"));
       permIcon.style.display = "none";
       permIconMinus.style.display = "block";
-      permLabel.textContent = "Unwhitelist Tab";
+      permLabel.textContent = getLocalizedText("unwhitelist");
     } else {
-      permBtn.setAttribute("aria-label", "Add to Permanent Whitelist");
-      permBtn.setAttribute("title", "Add to Permanent Whitelist");
+      permBtn.setAttribute("aria-label", getLocalizedText("whitelist"));
+      permBtn.setAttribute("title", getLocalizedText("whitelist"));
       permIcon.style.display = "block";
       permIconMinus.style.display = "none";
-      permLabel.textContent = "Whitelist Tab";
+      permLabel.textContent = getLocalizedText("whitelist");
     }
     // Temporary Whitelist Button
     const tempBtn = id("tempToggle");
     const tempIcon = id("tempIcon");
+    const tempIconOff = id("tempIconOff");
     const tempLabel = tempBtn.querySelector(".btn-label");
     if (st.tempWhitelisted) {
-      tempBtn.setAttribute("aria-label", "Remove Temporary Protection");
-      tempBtn.setAttribute("title", "Remove Temporary Protection");
-      tempIcon.style.filter = "grayscale(0) brightness(0.7)";
-      tempLabel.textContent = "Protect Tab";
+      tempBtn.setAttribute("aria-label", getLocalizedText("unprotect"));
+      tempBtn.setAttribute("title", getLocalizedText("unprotect"));
+      tempIcon.style.display = "none";
+      tempIconOff.style.display = "block";
+      tempLabel.textContent = getLocalizedText("unprotect");
     } else {
-      tempBtn.setAttribute("aria-label", "Protect Tab");
-      tempBtn.setAttribute("title", "Protect Tab");
-      tempIcon.style.filter = "none";
-      tempLabel.textContent = "Protect Tab";
+      tempBtn.setAttribute("aria-label", getLocalizedText("protect"));
+      tempBtn.setAttribute("title", getLocalizedText("protect"));
+      tempIcon.style.display = "block";
+      tempIconOff.style.display = "none";
+      tempLabel.textContent = getLocalizedText("protect");
     }
     // Pause/Resume Button
     const pauseBtn = id("pauseToggle");
@@ -103,43 +116,37 @@
     const resumeIcon = id("resumeIcon");
     const pauseLabel = id("pauseLabel");
     if (st.paused) {
-      pauseBtn.setAttribute("aria-label", "Resume Auto Discard");
-      pauseBtn.setAttribute("title", "Resume Auto Discard");
+      pauseBtn.setAttribute("aria-label", getLocalizedText("resume"));
+      pauseBtn.setAttribute("title", getLocalizedText("resume"));
       pauseIcon.style.display = "none";
       resumeIcon.style.display = "block";
-      pauseLabel.textContent = "Resume Auto Discard";
+      pauseLabel.textContent = getLocalizedText("resume");
       pauseIcon.style.filter = "grayscale(0) brightness(0.7)";
     } else {
-      pauseBtn.setAttribute("aria-label", "Pause Auto Discard");
-      pauseBtn.setAttribute("title", "Pause Auto Discard");
+      pauseBtn.setAttribute("aria-label", getLocalizedText("pause"));
+      pauseBtn.setAttribute("title", getLocalizedText("pause"));
       pauseIcon.style.display = "block";
       resumeIcon.style.display = "none";
-      pauseLabel.textContent = "Pause Auto Discard";
+      pauseLabel.textContent = getLocalizedText("pause");
       pauseIcon.style.filter = "none";
     }
     show(
       st.paused
-        ? { text: "Auto-discard is paused.", paused: true }
+        ? { text: getLocalizedText("pausedMsg"), margin: 0.5 }
         : st.tempWhitelisted
-        ? { text: "This tab is protected until closed.", paused: false }
-        : { text: "", paused: false }
+        ? { text: getLocalizedText("protectedMsg"), margin: 0.5 }
+        : { text: "", margin: 0.1 }
     );
   }
 
   /**
    * Show a message in the info area.
-   * @param {string|object} text
+   * @param {object} param0
    */
-  function show(text) {
+  function show({ text, margin }) {
     const info = id("info");
-    if (typeof text === "object" && text.paused) {
-      info.textContent = text.text;
-      info.style.marginTop = "0.5rem";
-    } else {
-      info.textContent =
-        typeof text === "string" ? text : (text && text.text) || "";
-      info.style.marginTop = "0.1rem";
-    }
+    info.textContent = text;
+    info.style.marginTop = margin + "rem";
   }
   /**
    * Shorthand for getElementById.
