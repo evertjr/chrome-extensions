@@ -4,7 +4,7 @@ const DEFAULT_IDLE_MIN = 15;
 let idleMinutes = DEFAULT_IDLE_MIN;
 
 let paused = false; // true = nothing will be auto-discarded
-const tempWhitelist = new Set(); // Set<tabId>
+let tempWhitelist = new Set(); // Set<tabId>
 let permanentWhitelist = [];
 
 /**
@@ -35,6 +35,13 @@ function maybeDiscard(tab) {
 }
 
 /**
+ * Save temporary whitelist to storage.
+ */
+async function saveTempWhitelist() {
+  await chrome.storage.local.set({ tempWhitelist: Array.from(tempWhitelist) });
+}
+
+/**
  * Start or restart the auto-discard alarm.
  */
 function startAlarm() {
@@ -50,7 +57,10 @@ chrome.alarms.onAlarm.addListener(async (a) => {
 });
 
 // Remove temp whitelist entry when tab closes
-chrome.tabs.onRemoved.addListener((tabId) => tempWhitelist.delete(tabId));
+chrome.tabs.onRemoved.addListener(async (tabId) => {
+  tempWhitelist.delete(tabId);
+  await saveTempWhitelist();
+});
 
 /**
  * Load settings (idle time, whitelist, pause state) from storage.
@@ -63,17 +73,25 @@ async function loadSettings() {
     });
   idleMinutes = Number(sIdle) || DEFAULT_IDLE_MIN;
   permanentWhitelist = Array.isArray(whitelist) ? whitelist : [];
-  const { paused: storedPause = false } = await chrome.storage.local.get({
+  const {
+    paused: storedPause = false,
+    tempWhitelist: storedTempWhitelist = [],
+  } = await chrome.storage.local.get({
     paused: false,
+    tempWhitelist: [],
   });
   paused = storedPause;
+  tempWhitelist = new Set(storedTempWhitelist);
 }
 
 // Sync settings on storage change
-chrome.storage.onChanged.addListener((ch) => {
+chrome.storage.onChanged.addListener((ch, areaName) => {
   if (ch.idleMinutes)
     idleMinutes = Number(ch.idleMinutes.newValue) || DEFAULT_IDLE_MIN;
   if (ch.whitelist) permanentWhitelist = ch.whitelist.newValue || [];
+  if (areaName === "local" && ch.tempWhitelist) {
+    tempWhitelist = new Set(ch.tempWhitelist.newValue || []);
+  }
 });
 
 /**
@@ -92,6 +110,7 @@ chrome.runtime.onMessage.addListener((msg, _sender, reply) => {
       } else {
         tempWhitelist.add(msg.tabId);
       }
+      saveTempWhitelist();
       reply({ tempWhitelisted: tempWhitelist.has(msg.tabId) });
       break;
     case "getStatus":
