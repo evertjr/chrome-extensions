@@ -201,19 +201,30 @@ async function openOrFocusOverview() {
     windowId: current.windowId,
   });
   if (existing) {
-    await chrome.windows.update(existing.windowId, { focused: true });
-    await chrome.tabs.update(existing.id, { active: true });
-    chrome.tabs.reload(existing.id);
+    // Focus & reload existing overview tab safely
+    try {
+      await chrome.windows.update(existing.windowId, { focused: true });
+      await chrome.tabs.update(existing.id, { active: true });
+      chrome.tabs.reload(existing.id);
+    } catch (e) {
+      // Ignore errors like 'Tabs cannot be edited right now'
+      console.warn("Could not focus/reload overview tab:", e.message);
+    }
     return;
   }
   // 5️⃣ Otherwise create it in this window
-  await chrome.tabs.create({
-    url: overviewURL,
-    pinned: true,
-    active: true,
-    index: current ? current.index + 1 : 0,
-    windowId: current.windowId,
-  });
+  try {
+    await chrome.tabs.create({
+      url: overviewURL,
+      pinned: true,
+      active: true,
+      index: current ? current.index + 1 : 0,
+      windowId: current.windowId,
+    });
+  } catch (e) {
+    // Ignore errors like 'Tabs cannot be edited right now'
+    console.warn("Could not create overview tab:", e.message);
+  }
 }
 
 // Helper to switch back to previous tab if possible
