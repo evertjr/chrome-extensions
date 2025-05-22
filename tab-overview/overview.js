@@ -294,12 +294,28 @@
     }
   });
 
+  function closeSelfSafely(tabId, delay = 200, retried = false) {
+    setTimeout(() => {
+      chrome.tabs.remove(tabId).catch((err) => {
+        // First attempt can fail while Chrome thinks the tab is being dragged.
+        if (!retried && err?.message?.includes("dragging")) {
+          // Try once more a bit later.
+          closeSelfSafely(tabId, 200, true);
+        }
+      });
+    }, delay);
+  }
+
   /* -------------------------------------------------------------
      When the Overview tab becomes visible again, rebuild the grid
   -------------------------------------------------------------*/
   document.addEventListener("visibilitychange", () => {
     if (document.visibilityState === "visible") {
       location.reload(); // simplest: reload to pull fresh tab list + thumbs
+    } else {
+      chrome.tabs.getCurrent((t) => {
+        if (t?.id) closeSelfSafely(t.id);
+      });
     }
   });
 })();

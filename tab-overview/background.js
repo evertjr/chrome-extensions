@@ -234,6 +234,8 @@ async function switchBackToPreviousTab(overviewTab) {
     try {
       await chrome.tabs.update(prev.id, { active: true });
       await chrome.windows.update(prev.windowId, { focused: true });
+      // Now that we've returned to the previous tab, close the overview
+      await chrome.tabs.remove(overviewTab.id);
       return true;
     } catch (e) {
       // Tab may have been closed; fallback to opening overview
@@ -302,10 +304,19 @@ function scheduleCapture(tabId, windowId, delay = 250) {
   setTimeout(() => capture(tabId, windowId), delay);
 }
 
-// onActivated --------------------------------------------------------
-chrome.tabs.onActivated.addListener(({ tabId, windowId }) =>
-  scheduleCapture(tabId, windowId)
-);
+/* -----------------------------------------------------------
+   Auto-close overview tab in the *current window* when user
+   activates another tab in that window. Allows one overview
+   per window to stay open.
+----------------------------------------------------------- */
+chrome.tabs.onActivated.addListener(async ({ tabId, windowId }) => {
+  const overviewURL = chrome.runtime.getURL("overview.html");
+  // Find overview tab in this window only
+  const [overviewTab] = await chrome.tabs.query({ url: overviewURL, windowId });
+  if (overviewTab && overviewTab.id !== tabId) {
+    chrome.tabs.remove(overviewTab.id).catch(() => {});
+  }
+});
 
 // onFocusChanged -----------------------------------------------------
 chrome.windows.onFocusChanged.addListener(async (winId) => {
