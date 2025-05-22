@@ -1,0 +1,27 @@
+<!DOCTYPE html>
+<meta charset="utf-8" />
+<title>Tab Overview</title>
+<link rel="stylesheet" href="style.css" />
+<body>
+  <div class="header">
+    <div class="search-container">
+      <svg
+        class="search-icon"
+        width="16"
+        height="16"
+        viewBox="0 0 24 24"
+        fill="none"
+        stroke="#999"
+        stroke-width="2"
+        stroke-linecap="round"
+        stroke-linejoin="round"
+      >
+        <path d="m21 21-4.34-4.34"></path>
+        <circle cx="11" cy="11" r="8"></circle>
+      </svg>
+      <input id="search" type="search" autofocus />
+    </div>
+  </div>
+  <div id="grid" role="list"></div>
+  <script src="overview.js" type="module"></script>
+</body>

@@ -1,0 +1,29 @@
+{
+  "name": "Tab Overview",
+  "description": "Safari-style grid of all tabs with thumbnails. Click any card to switch.",
+  "version": "1.0",
+  "manifest_version": 3,
+  "permissions": ["tabs", "storage", "activeTab"],
+  "background": {
+    "service_worker": "background.js"
+  },
+  "action": {
+    "default_popup": "overview.html",
+    "default_title": "Tab Overview"
+  },
+  "icons": {
+    "16": "icon.png",
+    "32": "icon.png",
+    "48": "icon.png",
+    "128": "icon.png"
+  },
+  "commands": {
+    "open-overview": {
+      "suggested_key": {
+        "default": "Ctrl+Shift+0",
+        "mac": "Command+Shift+0"
+      },
+      "description": "Open Tab Overview"
+    }
+  }
+}
