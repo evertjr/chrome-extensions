@@ -212,10 +212,20 @@ async function openOrFocusOverview() {
   });
 }
 
-// --- keyboard shortcut or toolbar icon -------------------------------
-chrome.commands.onCommand.addListener((cmd) => {
-  if (cmd === "open-overview") openOrFocusOverview();
-});
+// Helper to switch back to previous tab if possible
+async function switchBackToPreviousTab(overviewTab) {
+  const prev = (await chrome.storage.local.get(PREV_TAB_KEY))[PREV_TAB_KEY];
+  if (prev && prev.id !== overviewTab.id) {
+    try {
+      await chrome.tabs.update(prev.id, { active: true });
+      await chrome.windows.update(prev.windowId, { focused: true });
+      return true;
+    } catch (e) {
+      // Tab may have been closed; fallback to opening overview
+    }
+  }
+  return false;
+}
 
 chrome.action.onClicked.addListener(async () => {
   const overviewURL = chrome.runtime.getURL("overview.html");
@@ -224,21 +234,38 @@ chrome.action.onClicked.addListener(async () => {
     // Check if overview tab is focused and active
     const win = await chrome.windows.get(overviewTab.windowId);
     if (win.focused && overviewTab.active) {
-      // Try to switch back to the previous tab
-      const prev = (await chrome.storage.local.get(PREV_TAB_KEY))[PREV_TAB_KEY];
-      if (prev && prev.id !== overviewTab.id) {
-        try {
-          await chrome.tabs.update(prev.id, { active: true });
-          await chrome.windows.update(prev.windowId, { focused: true });
-          return;
-        } catch (e) {
-          // Tab may have been closed; fallback to opening overview
-        }
-      }
+      if (await switchBackToPreviousTab(overviewTab)) return;
     }
   }
   // Default: open or focus overview
   openOrFocusOverview();
+});
+
+chrome.commands.onCommand.addListener(async (cmd) => {
+  if (cmd === "open-overview") {
+    const overviewURL = chrome.runtime.getURL("overview.html");
+    const [overviewTab] = await chrome.tabs.query({ url: overviewURL });
+    if (overviewTab) {
+      const win = await chrome.windows.get(overviewTab.windowId);
+      if (win.focused && overviewTab.active) {
+        if (await switchBackToPreviousTab(overviewTab)) return;
+      }
+    }
+    openOrFocusOverview();
+  }
+});
+
+// Listen for messages from overview.js (e.g., for Esc key)
+chrome.runtime.onMessage.addListener((msg, sender, sendResponse) => {
+  if (msg && msg.type === "tabOverview:switchBack") {
+    (async () => {
+      const overviewURL = chrome.runtime.getURL("overview.html");
+      const [overviewTab] = await chrome.tabs.query({ url: overviewURL });
+      if (overviewTab) {
+        await switchBackToPreviousTab(overviewTab);
+      }
+    })();
+  }
 });
 
 // helper: schedule capture with a slight delay -----------------------

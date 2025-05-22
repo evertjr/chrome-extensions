@@ -19,8 +19,8 @@
   "commands": {
     "open-overview": {
       "suggested_key": {
-        "default": "Ctrl+Shift+0",
-        "mac": "Command+Shift+0"
+        "default": "Ctrl+Shift+Period",
+        "mac": "Command+Shift+Period"
       },
       "description": "Open Tab Overview"
     }

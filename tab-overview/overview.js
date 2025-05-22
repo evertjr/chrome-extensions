@@ -253,12 +253,10 @@
     if (cardToRemove) cardToRemove.remove();
   });
 
-  // === Esc closes the pinned Overview tab ============================
+  // === Esc switches back to previous tab instead of closing ===========
   window.addEventListener("keydown", (e) => {
     if (e.key === "Escape") {
-      if (chrome?.tabs?.getCurrent) {
-        chrome.tabs.getCurrent((t) => chrome.tabs.remove(t.id));
-      }
+      chrome.runtime.sendMessage({ type: "tabOverview:switchBack" });
     }
   });
 
