@@ -242,6 +242,40 @@
       e.preventDefault();
       document.activeElement.click();
     }
+    // Keyboard close: Delete or Backspace on a card
+    if (
+      (e.key === "Delete" || e.key === "Backspace") &&
+      document.activeElement?.classList.contains("card")
+    ) {
+      e.preventDefault();
+      const card = document.activeElement;
+      const tabId = Number(card.dataset.tabId);
+      if (tabId) {
+        chrome.tabs.remove(tabId);
+        // Remove card from DOM and cards array
+        const cardIndex = cards.indexOf(card);
+        card.remove();
+        cards.splice(cardIndex, 1);
+        // Find next visible card to focus
+        const vis = cards.filter((c) => c.style.display !== "none");
+        let nextFocus = null;
+        if (vis.length) {
+          // Try to focus the next card, or previous if at end
+          let nextIdx = vis.findIndex((c) => c.tabIndex === 0);
+          if (nextIdx === -1) nextIdx = cardIndex;
+          if (nextIdx >= vis.length) nextIdx = vis.length - 1;
+          if (nextIdx < 0) nextIdx = 0;
+          nextFocus = vis[nextIdx] || vis[0];
+          nextFocus.tabIndex = 0;
+          nextFocus.focus();
+          focusIndex = cards.indexOf(nextFocus);
+        } else {
+          // No cards left, focus search
+          search.focus();
+          focusIndex = -1;
+        }
+      }
+    }
   });
 
   /* ------- Handle tab updates and removals ----- */
