@@ -107,27 +107,25 @@
     </style>
   </head>
   <body>
-    <h1>Tab Discard Helper – Settings</h1>
+    <h1 id="optionsTitle"></h1>
 
-    <label for="idleMinutes">
-      Idle time before discarding (minutes):
+    <label id="idleLabel" for="idleMinutes">
+      <span id="idleLabelText"></span>
       <input type="number" id="idleMinutes" min="1" />
     </label>
 
-    <label for="whitelist">
-      Whitelist (one entry per line)<br />
-      <small>
-        Example: <code>github.com</code> or
-        <code>https://mail.google.com/</code>
-      </small>
+    <label id="whitelistLabel" for="whitelist">
+      <span id="whitelistLabelText"></span><br />
+      <small id="whitelistExample"></small>
       <textarea id="whitelist"></textarea>
     </label>
 
     <div style="display: flex; align-items: center">
-      <button id="save">Save</button>
+      <button id="save"></button>
       <span id="status"></span>
     </div>
 
-    <script src="options.js"></script>
+    <script type="module" src="i18n.js"></script>
+    <script type="module" src="options.js"></script>
   </body>
 </html>
