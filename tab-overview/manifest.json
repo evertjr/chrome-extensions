@@ -8,7 +8,6 @@
     "service_worker": "background.js"
   },
   "action": {
-    "default_popup": "overview.html",
     "default_title": "Tab Overview"
   },
   "icons": {

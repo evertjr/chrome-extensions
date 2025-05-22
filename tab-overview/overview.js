@@ -18,8 +18,10 @@
   search.focus(); // browsers sometimes ignore autofocus
   /* ------------------------------------------------------------------ */
 
-  /* get tab data + cached thumbs */
-  const tabs = await chrome.tabs.query({ currentWindow: true });
+  const overviewURL = chrome.runtime.getURL("overview.html");
+  const tabs = (await chrome.tabs.query({ currentWindow: true })).filter(
+    (tab) => tab.url !== overviewURL
+  );
   const thumbs = await chrome.storage.local.get(
     tabs.map((t) => "thumb_" + t.id)
   );
@@ -249,5 +251,23 @@
       (card) => card.dataset.tabId == tabId
     );
     if (cardToRemove) cardToRemove.remove();
+  });
+
+  // === Esc closes the pinned Overview tab ============================
+  window.addEventListener("keydown", (e) => {
+    if (e.key === "Escape") {
+      if (chrome?.tabs?.getCurrent) {
+        chrome.tabs.getCurrent((t) => chrome.tabs.remove(t.id));
+      }
+    }
+  });
+
+  /* -------------------------------------------------------------
+     When the Overview tab becomes visible again, rebuild the grid
+  -------------------------------------------------------------*/
+  document.addEventListener("visibilitychange", () => {
+    if (document.visibilityState === "visible") {
+      location.reload(); // simplest: reload to pull fresh tab list + thumbs
+    }
   });
 })();

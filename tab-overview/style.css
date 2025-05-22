@@ -1,14 +1,16 @@
 /* — layout — */
 body {
   margin: 0;
-  width: 700px;
-  height: 520px;
+  width: 100vw;
+  height: 100vh;
+  min-height: 100vh;
   background: #101012;
   color: #eee;
   font-family: system-ui, sans-serif;
   display: flex;
   flex-direction: column;
-  padding: 14px 14px 0; /* Remove bottom padding */
+  padding: 0;
+  box-sizing: border-box;
 
   scrollbar-width: none; /* Firefox */
   -ms-overflow-style: none; /* IE and Edge */
@@ -22,9 +24,8 @@ body {
 .header {
   display: flex;
   justify-content: flex-end;
-  align-items: flex-end;
-  padding: 4px;
-  padding-bottom: 14px;
+  margin-bottom: 14px;
+  padding: 14px 14px 0 14px;
 }
 
 /* --- search container --- */
@@ -48,7 +49,7 @@ body {
 /* --- search input --- */
 #search {
   width: 100%;
-  padding: 8px 12px 8px 32px; /* Left padding for icon */
+  padding: 8px 4px 8px 32px; /* Left padding for icon */
   font-size: 14px;
   border-radius: 8px;
   border: none;
@@ -70,21 +71,29 @@ body {
     no-repeat 50% 50%;
   cursor: pointer;
   margin-left: 4px;
+  opacity: 0.5;
 }
 
 /* --- grid layout --- */
 #grid {
-  flex: 1;
-  overflow: auto;
   display: grid;
   gap: 14px;
-  grid-template-columns: repeat(
-    auto-fill,
-    minmax(200px, 1fr)
-  ); /* Flexible cards */
-  align-content: start; /* Don't vertically stretch */
-  width: 100%; /* Fill the entire width */
-  padding-bottom: 14px; /* Add bottom padding to the grid instead */
+  width: 100%;
+  box-sizing: border-box;
+  padding: 0 14px 14px 14px;
+  grid-template-columns: repeat(2, 1fr);
+}
+
+@media (min-width: 900px) {
+  #grid {
+    grid-template-columns: repeat(3, 1fr);
+  }
+}
+
+@media (min-width: 1300px) {
+  #grid {
+    grid-template-columns: repeat(4, 1fr);
+  }
 }
 
 /* --- card styling (fixed width and height) --- */
@@ -94,12 +103,13 @@ body {
   cursor: default;
   box-shadow: 0 1px 3px rgba(0, 0, 0, 0.5);
   overflow: hidden;
-  height: 180px;
   display: flex;
   flex-direction: column;
   position: relative;
   width: 100%;
   min-width: 0;
+  min-height: 150px;
+  aspect-ratio: 16 / 10;
 }
 
 /* Inline close button inside info */
@@ -134,13 +144,15 @@ body {
   order: -1; /* Move to top */
   background: rgba(0, 0, 0, 0.3); /* Semi-transparent background */
   min-width: 0; /* Enable text truncation */
-  flex: 1;
+  height: 20px;
+  flex-shrink: 0;
 }
 
 .thumb {
   width: 100%;
-  height: 145px; /* fixed height for thumbnail */
+  height: 100%; /* fixed height for thumbnail */
   object-fit: cover;
+  object-position: top;
   background: #333;
   flex: none; /* prevent stretching */
   margin: 0; /* remove any margins */
