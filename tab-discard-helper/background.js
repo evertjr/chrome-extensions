@@ -6,6 +6,7 @@ let idleMinutes = DEFAULT_IDLE_MIN;
 let paused = false; // true = nothing will be auto-discarded
 let tempWhitelist = new Set(); // Set<tabId>
 let permanentWhitelist = [];
+let isProcessing = false; // Prevent concurrent alarm processing
 
 /**
  * Check if a tab is whitelisted (paused, temp, or permanent).
@@ -16,6 +17,7 @@ let permanentWhitelist = [];
 function isWhitelisted(url, tabId) {
   if (paused) return true;
   if (tempWhitelist.has(tabId)) return true;
+  if (!url) return false;
   return permanentWhitelist.some((p) => url.includes(p));
 }
 
@@ -26,11 +28,18 @@ function isWhitelisted(url, tabId) {
 function maybeDiscard(tab) {
   if (tab.active) return;
   if (!tab || tab.discarded || !tab.url || tab.url.startsWith("chrome")) return;
-  if (isWhitelisted(tab.url, tab.id)) return;
+
+  // Double-check whitelist status before discarding
+  const whitelisted = isWhitelisted(tab.url, tab.id);
+  if (whitelisted) return;
+
   const idleMs = idleMinutes * 60_000;
   const inactiveFor = Date.now() - tab.lastAccessed;
   if (inactiveFor >= idleMs) {
-    chrome.tabs.discard(tab.id).catch(() => {});
+    // Final check before discarding - ensure tab is still not whitelisted
+    if (!isWhitelisted(tab.url, tab.id)) {
+      chrome.tabs.discard(tab.id).catch(() => {});
+    }
   }
 }
 
@@ -48,15 +57,29 @@ async function cleanupTempWhitelist() {
   if (tempWhitelist.size === 0) return;
 
   try {
+    // Get all tabs from all windows to ensure we don't miss any
     const tabs = await chrome.tabs.query({});
     const existingTabIds = new Set(tabs.map((tab) => tab.id));
     const originalSize = tempWhitelist.size;
+    const toRemove = [];
 
-    // Remove tab IDs that no longer exist
+    // Check each tab ID individually to be extra sure
     for (const tabId of tempWhitelist) {
       if (!existingTabIds.has(tabId)) {
-        tempWhitelist.delete(tabId);
+        // Double-check by trying to get the tab directly
+        try {
+          await chrome.tabs.get(tabId);
+          // If we get here, the tab exists, so don't remove it
+        } catch (tabError) {
+          // Tab doesn't exist, safe to remove
+          toRemove.push(tabId);
+        }
       }
+    }
+
+    // Remove invalid tab IDs
+    for (const tabId of toRemove) {
+      tempWhitelist.delete(tabId);
     }
 
     // Save if we removed any invalid entries
@@ -79,12 +102,18 @@ function startAlarm() {
 // Alarm handler: check all tabs for discard eligibility
 chrome.alarms.onAlarm.addListener(async (a) => {
   if (a.name !== "autoDiscard") return;
+  if (isProcessing) return; // Prevent concurrent processing
 
-  // Clean up stale tab IDs from temp whitelist periodically
-  await cleanupTempWhitelist();
+  isProcessing = true;
+  try {
+    const tabs = await chrome.tabs.query({});
+    tabs.forEach(maybeDiscard);
 
-  const tabs = await chrome.tabs.query({});
-  tabs.forEach(maybeDiscard);
+    // Clean up stale tab IDs from temp whitelist AFTER discard logic
+    await cleanupTempWhitelist();
+  } finally {
+    isProcessing = false;
+  }
 });
 
 // Remove temp whitelist entry when tab closes
