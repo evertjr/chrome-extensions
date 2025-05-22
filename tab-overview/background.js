@@ -195,20 +195,24 @@ async function openOrFocusOverview() {
   }
 
   const overviewURL = chrome.runtime.getURL("overview.html");
-  // 4️⃣ If it's already open, focus & reload
-  const [existing] = await chrome.tabs.query({ url: overviewURL });
+  // 4️⃣ If it's already open in this window, focus & reload
+  const [existing] = await chrome.tabs.query({
+    url: overviewURL,
+    windowId: current.windowId,
+  });
   if (existing) {
     await chrome.windows.update(existing.windowId, { focused: true });
     await chrome.tabs.update(existing.id, { active: true });
     chrome.tabs.reload(existing.id);
     return;
   }
-  // 5️⃣ Otherwise create it
+  // 5️⃣ Otherwise create it in this window
   await chrome.tabs.create({
     url: overviewURL,
     pinned: true,
     active: true,
     index: current ? current.index + 1 : 0,
+    windowId: current.windowId,
   });
 }
 
@@ -228,8 +232,16 @@ async function switchBackToPreviousTab(overviewTab) {
 }
 
 chrome.action.onClicked.addListener(async () => {
+  // Determine current window
+  const [current] = await chrome.tabs.query({
+    active: true,
+    currentWindow: true,
+  });
   const overviewURL = chrome.runtime.getURL("overview.html");
-  const [overviewTab] = await chrome.tabs.query({ url: overviewURL });
+  // Find overview in current window only
+  const [overviewTab] = current
+    ? await chrome.tabs.query({ url: overviewURL, windowId: current.windowId })
+    : [];
   if (overviewTab) {
     // Check if overview tab is focused and active
     const win = await chrome.windows.get(overviewTab.windowId);
@@ -243,8 +255,19 @@ chrome.action.onClicked.addListener(async () => {
 
 chrome.commands.onCommand.addListener(async (cmd) => {
   if (cmd === "open-overview") {
+    // Determine current window
+    const [current] = await chrome.tabs.query({
+      active: true,
+      currentWindow: true,
+    });
     const overviewURL = chrome.runtime.getURL("overview.html");
-    const [overviewTab] = await chrome.tabs.query({ url: overviewURL });
+    // Find overview in current window only
+    const [overviewTab] = current
+      ? await chrome.tabs.query({
+          url: overviewURL,
+          windowId: current.windowId,
+        })
+      : [];
     if (overviewTab) {
       const win = await chrome.windows.get(overviewTab.windowId);
       if (win.focused && overviewTab.active) {
@@ -256,15 +279,10 @@ chrome.commands.onCommand.addListener(async (cmd) => {
 });
 
 // Listen for messages from overview.js (e.g., for Esc key)
-chrome.runtime.onMessage.addListener((msg, sender, sendResponse) => {
-  if (msg && msg.type === "tabOverview:switchBack") {
-    (async () => {
-      const overviewURL = chrome.runtime.getURL("overview.html");
-      const [overviewTab] = await chrome.tabs.query({ url: overviewURL });
-      if (overviewTab) {
-        await switchBackToPreviousTab(overviewTab);
-      }
-    })();
+chrome.runtime.onMessage.addListener((msg, sender) => {
+  if (msg?.type === "tabOverview:switchBack" && sender.tab) {
+    // Switch back using the sender overview tab context
+    switchBackToPreviousTab(sender.tab);
   }
 });
 
