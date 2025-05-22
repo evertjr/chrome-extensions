@@ -29,7 +29,7 @@ Tab Overview is a Safari-style grid view for Chrome that shows all your open tab
 
 - **Open the Overview:**
   - Click the Tab Overview icon in your Chrome toolbar, or
-  - Use the keyboard shortcut: <kbd>Ctrl</kbd>+<kbd>Shift</kbd>+<kbd>0</kbd> (Windows/Linux) or <kbd>Command</kbd>+<kbd>Shift</kbd>+<kbd>0</kbd> (Mac).
+  - Use the keyboard shortcut: <kbd>Ctrl</kbd>+<kbd>Shift</kbd>+<kbd>.</kbd> (Windows/Linux) or <kbd>Command</kbd>+<kbd>Shift</kbd>+<kbd>.</kbd> (Mac).
 - **Search Tabs:**
   - Start typing in the search bar to filter tabs by title or URL.
 - **Switch Tabs:**
