@@ -1,0 +1,27 @@
+{
+  "manifest_version": 3,
+  "name": "Images Grabber",
+  "description": "Download all images (including lazy-loaded and canvas) from the current page",
+  "version": "1.0",
+  "permissions": ["activeTab", "storage", "downloads", "scripting"],
+  "host_permissions": ["<all_urls>"],
+  "background": {
+    "service_worker": "background.js"
+  },
+  "action": {
+    "default_title": "Grab Images"
+  },
+  "icons": {
+    "16": "icon.png",
+    "32": "icon.png",
+    "48": "icon.png",
+    "128": "icon.png"
+  },
+  "content_scripts": [
+    {
+      "matches": ["<all_urls>"],
+      "js": ["content.js"],
+      "run_at": "document_idle"
+    }
+  ]
+}
