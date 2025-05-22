@@ -1,22 +1,20 @@
 (async () => {
-  /* grab active tab */
+  // Get the active tab in the current window
   const [tab] = await chrome.tabs.query({ active: true, currentWindow: true });
   if (!tab) return;
-
   const url = tab.url || "";
   const urlEl = id("url");
   urlEl.textContent = url;
 
-  /* ask background for status */
+  // Query background for current status
   let status = await chrome.runtime.sendMessage({
     cmd: "getStatus",
     tabId: tab.id,
     url,
   });
+  render(status);
 
-  render(status); // initial button labels/icons
-
-  /* ----- button actions ----- */
+  // Button actions
   id("discard").onclick = async () => {
     try {
       await chrome.tabs.discard(tab.id);
@@ -30,11 +28,9 @@
     const { whitelist = [] } = await chrome.storage.sync.get({ whitelist: [] });
     const host = new URL(url).hostname;
     const isOn = whitelist.some((p) => url.includes(p));
-
     const newList = isOn
       ? whitelist.filter((p) => p !== host && p !== url)
       : [...whitelist, host];
-
     await chrome.storage.sync.set({ whitelist: newList });
     status = { ...status, permanentlyWhitelisted: !isOn };
     render(status);
@@ -63,7 +59,10 @@
     }
   };
 
-  /* ----- helpers ----- */
+  /**
+   * Render the popup UI based on current status.
+   * @param {Object} st - Status object
+   */
   function render(st) {
     // Permanent Whitelist Button
     const permBtn = id("permToggle");
@@ -80,8 +79,7 @@
       permIcon.style.filter = "none";
       permLabel.textContent = "Whitelist Tab";
     }
-
-    // Temporary Whitelist Button (Protect Tab)
+    // Temporary Whitelist Button
     const tempBtn = id("tempToggle");
     const tempIcon = id("tempIcon");
     const tempLabel = tempBtn.querySelector(".btn-label");
@@ -96,7 +94,6 @@
       tempIcon.style.filter = "none";
       tempLabel.textContent = "Protect Tab";
     }
-
     // Pause/Resume Button
     const pauseBtn = id("pauseToggle");
     const pauseIcon = id("pauseIcon");
@@ -117,7 +114,6 @@
       pauseLabel.textContent = "Pause Auto Discard";
       pauseIcon.style.filter = "none";
     }
-
     show(
       st.paused
         ? "Auto-discard is paused."
@@ -127,9 +123,18 @@
     );
   }
 
+  /**
+   * Show a message in the info area.
+   * @param {string} text
+   */
   function show(text) {
     id("info").textContent = text;
   }
+  /**
+   * Shorthand for getElementById.
+   * @param {string} x
+   * @returns {HTMLElement}
+   */
   function id(x) {
     return document.getElementById(x);
   }

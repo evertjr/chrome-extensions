@@ -51,4 +51,10 @@ Tab Overview is a Safari-style grid view for Chrome that shows all your open tab
 
 ---
 
+## License
+
+This project is licensed under the MIT License. See the LICENSE file for details.
+
+Developed by Evert Junior.
+
 Enjoy a faster, more visual way to manage your Chrome tabs!

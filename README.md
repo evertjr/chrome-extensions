@@ -34,3 +34,11 @@ See [`tab-discard-helper/README.md`](tab-discard-helper/README.md) for details.
 - All extensions are designed for Chrome and Chromium-based browsers.
 
 Enjoy a more productive and efficient browsing experience!
+
+---
+
+## License
+
+This project is licensed under the MIT License. See the LICENSE file for details.
+
+Developed by Evert Junior.

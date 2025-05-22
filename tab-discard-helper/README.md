@@ -47,4 +47,10 @@ Tab Discard Helper is a Chrome extension designed to help you manage memory and 
 
 ---
 
+## License
+
+This project is licensed under the MIT License. See the LICENSE file for details.
+
+Developed by Evert Junior.
+
 Keep Chrome running smoothly with Tab Discard Helper!

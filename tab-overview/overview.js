@@ -1,14 +1,16 @@
+// Tab Overview – Grid UI for Chrome Extension
+
 (async () => {
   const grid = document.getElementById("grid");
   const search = document.getElementById("search");
 
-  /* Import the search placeholder text from i18n.js */
-  // Using dynamic import for ES modules support
+  /**
+   * Set the search bar placeholder using i18n, fallback to English if needed.
+   */
   try {
     const { getSearchPlaceholder } = await import("./i18n.js");
     search.placeholder = getSearchPlaceholder();
   } catch (e) {
-    // Fallback if module loading fails
     search.placeholder = "Search tabs";
     console.error("Could not load i18n module:", e);
   }
@@ -26,7 +28,11 @@
     tabs.map((t) => "thumb_" + t.id)
   );
 
-  /* build cards ------------------------------------------------------- */
+  /**
+   * Build card elements for each tab.
+   * @param {Object} tab - Chrome tab object
+   * @returns {HTMLDivElement} Card element
+   */
   const cards = tabs.map((tab) => {
     const card = document.createElement("div");
     card.className = "card";
@@ -102,9 +108,15 @@
     return card;
   });
 
-  cards.forEach((c) => grid.appendChild(c));
+  // Batch DOM updates with DocumentFragment
+  const frag = document.createDocumentFragment();
+  cards.forEach((c) => frag.appendChild(c));
+  grid.appendChild(frag);
 
-  /* -------- live search filter (does NOT steal focus) --------------- */
+  /**
+   * Get currently visible cards (not filtered out by search).
+   * @returns {HTMLDivElement[]} Array of visible card elements
+   */
   const visibleCards = () => cards.filter((c) => c.style.display !== "none");
 
   search.addEventListener("input", () => {
@@ -121,6 +133,10 @@
   /* -------- keyboard navigation ------------------------------------- */
   let focusIndex = -1; // start with NONE focused
 
+  /**
+   * Move focus in the grid by direction.
+   * @param {string} direction - 'up', 'down', 'left', 'right'
+   */
   function move(direction) {
     const vis = visibleCards();
     if (!vis.length) return;
@@ -294,6 +310,12 @@
     }
   });
 
+  /**
+   * Close the overview tab safely, retrying if needed.
+   * @param {number} tabId - The tab ID to close.
+   * @param {number} [delay=200] - Delay in ms.
+   * @param {boolean} [retried=false] - Whether this is a retry.
+   */
   function closeSelfSafely(tabId, delay = 200, retried = false) {
     setTimeout(() => {
       chrome.tabs.remove(tabId).catch((err) => {

@@ -1,4 +1,6 @@
-// Load current settings into the form
+/**
+ * Load current settings into the options form on DOMContentLoaded.
+ */
 document.addEventListener("DOMContentLoaded", async () => {
   const { idleMinutes, whitelist } = await chrome.storage.sync.get({
     idleMinutes: 15,
@@ -9,7 +11,9 @@ document.addEventListener("DOMContentLoaded", async () => {
   document.getElementById("whitelist").value = whitelist.join("\n");
 });
 
-// Save button
+/**
+ * Save settings from the form to storage when Save button is clicked.
+ */
 document.getElementById("save").addEventListener("click", () => {
   const idleMinutes =
     Number(document.getElementById("idleMinutes").value) || 15;

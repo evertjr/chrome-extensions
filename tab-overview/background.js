@@ -1,133 +1,132 @@
 /* Tab Overview – background service worker */
 
-const THUMB_OPTS = { format: "jpeg", quality: 70 }; // tweak as you like
-const MAX_THUMBNAILS = 50; // Limit to prevent storage issues
-
-let userHasInteracted = false; // Set to true after popup or shortcut is used
-
-// Key for storing previous tab info
+const THUMB_OPTS = { format: "jpeg", quality: 40 };
+const MAX_THUMBNAILS = 200;
+let userHasInteracted = false;
 const PREV_TAB_KEY = "tabOverview_prevTab";
+const debounceTimers = new Map();
 
-/* --- keep a fresh thumbnail for the active tab ------------------------ */
+/**
+ * Capture a thumbnail for the given tab and window.
+ * @param {number} tabId - The tab ID to capture.
+ * @param {number} windowId - The window ID containing the tab.
+ */
 async function capture(tabId, windowId) {
-  if (!userHasInteracted) {
-    // console.log(`Capture for tab ${tabId} skipped: user has not interacted yet.`);
-    return;
-  }
-  if (tabId === chrome.tabs.TAB_ID_NONE) {
-    // console.log(`Capture for tab ${tabId} skipped: TAB_ID_NONE.`);
-    return;
-  }
-
+  if (!userHasInteracted || tabId === chrome.tabs.TAB_ID_NONE) return;
   let tabInfo;
   try {
     tabInfo = await chrome.tabs.get(tabId);
   } catch (e) {
-    // console.warn(`Capture for tab ${tabId} failed: could not get tab info (possibly closed). Error: ${e.message}`);
-    return; // Tab may have been closed
+    return;
   }
-
   const { url } = tabInfo;
   if (
     !url ||
     /^(chrome|edge|chrome-untrusted|chrome-extension|about|moz-extension|view-source):/i.test(
       url
     )
-  ) {
-    // console.log(`Capture for tab ${tabId} (URL: ${url}) skipped: forbidden page.`);
-    // Optional: remove existing thumbnail if page becomes forbidden
-    // await chrome.storage.local.remove("thumb_" + tabId);
+  )
     return;
-  }
-
-  // console.log(`Attempting capture for tab ${tabId} (URL: ${url}, Window: ${windowId})`);
-
   try {
     let dataUrl = await chrome.tabs.captureVisibleTab(windowId, THUMB_OPTS);
-    // console.log(`Initial capture for tab ${tabId}: dataUrl length ${dataUrl ? dataUrl.length : 'undefined'}`);
-
     if (!dataUrl || dataUrl.length <= 2000) {
-      // Screenshot is too small or capture failed to return data
-      // console.warn(`Tab ${tabId} (URL: ${url}): initial screenshot small (length ${dataUrl ? dataUrl.length : 'undefined'}). Scheduling retry.`);
-
-      await new Promise((resolve) => setTimeout(resolve, 700)); // Wait 700ms
-
+      await new Promise((resolve) => setTimeout(resolve, 700));
       try {
-        // console.log(`Tab ${tabId}: attempting retry capture.`);
         const retryUrl = await chrome.tabs.captureVisibleTab(
           windowId,
           THUMB_OPTS
         );
-        // console.log(`Retry capture for tab ${tabId}: retryUrl length ${retryUrl ? retryUrl.length : 'undefined'}`);
-
         if (retryUrl && retryUrl.length > 2000) {
-          dataUrl = retryUrl; // Retry was successful and larger
-          // console.log(`Tab ${tabId}: retry successful, using new dataUrl (length ${dataUrl.length}).`);
+          dataUrl = retryUrl;
         } else {
-          // console.warn(`Tab ${tabId} (URL: ${url}): retry screenshot also small (length ${retryUrl ? retryUrl.length : 'undefined'}) or failed. Not storing thumbnail.`);
-          return; // Exit without storing if retry is also bad or failed
+          return;
         }
-      } catch (retryErr) {
-        // console.warn(`Tab ${tabId} (URL: ${url}): capture retry failed: ${retryErr.message}. Not storing original small image.`);
-        // if (!/permission/i.test(retryErr?.message)) {
-        //   console.error(`Non-permission error during capture retry for tab ${tabId}:`, retryErr);
-        // }
-        return; // Exit without storing if retry capture fails
+      } catch {
+        return;
       }
     }
-
-    // If we reach here, dataUrl should be from a successful initial capture or a successful retry.
-    if (!dataUrl || dataUrl.length <= 2000) {
-      // console.warn(`Tab ${tabId} (URL: ${url}): final dataUrl still too small or undefined (length ${dataUrl ? dataUrl.length : 'N/A'}). Not storing.`);
-      return;
-    }
-
-    // console.log(`Tab ${tabId} (URL: ${url}): storing thumbnail (length ${dataUrl.length}).`);
+    if (!dataUrl || dataUrl.length <= 2000) return;
     await storeThumb(tabId, dataUrl);
     await maintainThumbnailLimit();
-  } catch (initialErr) {
-    // Error from the *initial* chrome.tabs.captureVisibleTab call
-    // console.warn(`Initial capture for tab ${tabId} (URL: ${url}) failed: ${initialErr.message}.`);
-    // if (!/permission/i.test(initialErr?.message)) {
-    //   console.error(`Non-permission error during initial capture for tab ${tabId}:`, initialErr);
-    // }
-    // If initial capture fails, don't store anything.
+  } catch {}
+}
+
+/**
+ * Capture a thumbnail with exponential backoff on failure.
+ * @param {number} tabId - The tab ID to capture.
+ * @param {number} windowId - The window ID containing the tab.
+ * @param {number} [attempt=0] - Current retry attempt.
+ */
+async function captureWithBackoff(tabId, windowId, attempt = 0) {
+  if (!userHasInteracted || tabId === chrome.tabs.TAB_ID_NONE) return;
+  let tabInfo;
+  try {
+    tabInfo = await chrome.tabs.get(tabId);
+  } catch {
+    return;
+  }
+  const { url } = tabInfo;
+  if (
+    !url ||
+    /^(chrome|edge|chrome-untrusted|chrome-extension|about|moz-extension|view-source):/i.test(
+      url
+    )
+  )
+    return;
+  try {
+    let dataUrl = await chrome.tabs.captureVisibleTab(windowId, THUMB_OPTS);
+    if (!dataUrl || dataUrl.length <= 2000) {
+      if (attempt < 3) {
+        setTimeout(
+          () => captureWithBackoff(tabId, windowId, attempt + 1),
+          200 * Math.pow(2, attempt)
+        );
+      }
+      return;
+    }
+    await storeThumb(tabId, dataUrl);
+    await maintainThumbnailLimit();
+  } catch {
+    if (attempt < 3) {
+      setTimeout(
+        () => captureWithBackoff(tabId, windowId, attempt + 1),
+        200 * Math.pow(2, attempt)
+      );
+    }
   }
 }
 
-// Store a thumbnail with timestamp
-async function storeThumb(tabId, dataUrl) {
-  const key = "thumb_" + tabId;
+/**
+ * Store a thumbnail (or batch of thumbnails) with timestamp.
+ * @param {number|Object} tabIdOrObj - Tab ID for single, or object for batch.
+ * @param {string} [dataUrl] - Data URL for single thumbnail.
+ */
+async function storeThumb(tabIdOrObj, dataUrl) {
+  if (typeof tabIdOrObj === "object" && dataUrl === undefined) {
+    await chrome.storage.local.set(tabIdOrObj);
+    return;
+  }
+  const key = "thumb_" + tabIdOrObj;
   const value = {
     data: dataUrl,
     timestamp: Date.now(),
   };
-
-  // Store as object to avoid any potential string size limits
   await chrome.storage.local.set({ [key]: value });
 }
 
-// Ensure we don't exceed storage limits
+/**
+ * Ensure the number of stored thumbnails does not exceed the limit.
+ */
 async function maintainThumbnailLimit() {
   try {
-    // Get all thumbnails
     const storage = await chrome.storage.local.get(null);
     const thumbKeys = Object.keys(storage).filter((key) =>
       key.startsWith("thumb_")
     );
-
-    // If we're under the limit, no need to clean up
     if (thumbKeys.length <= MAX_THUMBNAILS) return;
-
-    // Sort thumbnails by timestamp (oldest first)
     const sortedThumbs = thumbKeys
-      .map((key) => ({
-        key,
-        timestamp: storage[key]?.timestamp || 0,
-      }))
+      .map((key) => ({ key, timestamp: storage[key]?.timestamp || 0 }))
       .sort((a, b) => a.timestamp - b.timestamp);
-
-    // Remove oldest thumbnails to get under the limit
     const toRemove = sortedThumbs.slice(
       0,
       sortedThumbs.length - MAX_THUMBNAILS
@@ -140,141 +139,101 @@ async function maintainThumbnailLimit() {
   }
 }
 
-/* --- Event listeners for tab activity -------------------------------- */
-// The listeners below are intentionally removed as they are redundant
-// with the ones using scheduleCapture further down.
-
-// // When a tab is activated, capture it immediately
-// chrome.tabs.onActivated.addListener(({ tabId, windowId }) => {
-//   capture(tabId, windowId);
-// });
-//
-// // When window focus changes, capture the active tab
-// chrome.windows.onFocusChanged.addListener(async (winId) => {
-//   if (winId === chrome.windows.WINDOW_ID_NONE) return;
-//   const [tab] = await chrome.tabs.query({ active: true, windowId: winId });
-//   if (tab) capture(tab.id, winId);
-// });
-//
-// // Also update thumbnail when a tab is updated (URL changes, page loads, etc.)
-// chrome.tabs.onUpdated.addListener((tabId, changeInfo, tab) => {
-//   // Only capture when the tab has completed loading and is the active tab
-//   if (changeInfo.status === "complete" && tab.active) {
-//     capture(tabId, tab.windowId);
-//   }
-// });
-
-/* --- remove thumbnail when its tab closes ---------------------------- */
-chrome.tabs.onRemoved.addListener((tabId /*, removeInfo */) => {
+// Remove thumbnail when its tab closes
+chrome.tabs.onRemoved.addListener((tabId) => {
   chrome.storage.local.remove("thumb_" + tabId);
 });
 
-/* ---------------------------------------------------
-   Open (or focus) the Overview as a pinned tab
-   – wait 500 ms, capture, then open
---------------------------------------------------- */
+/**
+ * Open (or focus) the Overview as a pinned tab. Captures the current tab before opening.
+ */
 async function openOrFocusOverview() {
   userHasInteracted = true;
-
-  // 1️⃣ Get the tab that's visible right now
   const [current] = await chrome.tabs.query({
     active: true,
     currentWindow: true,
   });
   if (current) {
-    // Store previous tab info in storage
     await chrome.storage.local.set({
       [PREV_TAB_KEY]: { id: current.id, windowId: current.windowId },
     });
-    // 3️⃣ Take one shot at capturing it
     try {
       await capture(current.id, current.windowId);
-    } catch (e) {
-      /* ignore any errors */
-    }
+    } catch {}
   }
-
   const overviewURL = chrome.runtime.getURL("overview.html");
-  // 4️⃣ If it's already open in this window, focus & reload
   const [existing] = await chrome.tabs.query({
     url: overviewURL,
-    windowId: current.windowId,
+    windowId: current?.windowId,
   });
   if (existing) {
-    // Focus & reload existing overview tab safely
     try {
       await chrome.windows.update(existing.windowId, { focused: true });
       await chrome.tabs.update(existing.id, { active: true });
       chrome.tabs.reload(existing.id);
     } catch (e) {
-      // Ignore errors like 'Tabs cannot be edited right now'
       console.warn("Could not focus/reload overview tab:", e.message);
     }
     return;
   }
-  // 5️⃣ Otherwise create it in this window
   try {
     await chrome.tabs.create({
       url: overviewURL,
       pinned: true,
       active: true,
       index: current ? current.index + 1 : 0,
-      windowId: current.windowId,
+      windowId: current?.windowId,
     });
   } catch (e) {
-    // Ignore errors like 'Tabs cannot be edited right now'
     console.warn("Could not create overview tab:", e.message);
   }
 }
 
-// Helper to switch back to previous tab if possible
+/**
+ * Switch back to the previous tab if possible, closing the overview tab.
+ * @param {Object} overviewTab - The overview tab object.
+ * @returns {Promise<boolean>} True if switched, false otherwise.
+ */
 async function switchBackToPreviousTab(overviewTab) {
   const prev = (await chrome.storage.local.get(PREV_TAB_KEY))[PREV_TAB_KEY];
   if (prev && prev.id !== overviewTab.id) {
     try {
       await chrome.tabs.update(prev.id, { active: true });
       await chrome.windows.update(prev.windowId, { focused: true });
-      // Now that we've returned to the previous tab, close the overview
       await chrome.tabs.remove(overviewTab.id);
       return true;
-    } catch (e) {
-      // Tab may have been closed; fallback to opening overview
-    }
+    } catch {}
   }
   return false;
 }
 
+// Handle browser action click
 chrome.action.onClicked.addListener(async () => {
-  // Determine current window
   const [current] = await chrome.tabs.query({
     active: true,
     currentWindow: true,
   });
   const overviewURL = chrome.runtime.getURL("overview.html");
-  // Find overview in current window only
   const [overviewTab] = current
     ? await chrome.tabs.query({ url: overviewURL, windowId: current.windowId })
     : [];
   if (overviewTab) {
-    // Check if overview tab is focused and active
     const win = await chrome.windows.get(overviewTab.windowId);
     if (win.focused && overviewTab.active) {
       if (await switchBackToPreviousTab(overviewTab)) return;
     }
   }
-  // Default: open or focus overview
   openOrFocusOverview();
 });
 
+// Handle keyboard shortcut command
 chrome.commands.onCommand.addListener(async (cmd) => {
   if (cmd === "open-overview") {
-    // Determine current window
     const [current] = await chrome.tabs.query({
       active: true,
       currentWindow: true,
     });
     const overviewURL = chrome.runtime.getURL("overview.html");
-    // Find overview in current window only
     const [overviewTab] = current
       ? await chrome.tabs.query({
           url: overviewURL,
@@ -294,40 +253,46 @@ chrome.commands.onCommand.addListener(async (cmd) => {
 // Listen for messages from overview.js (e.g., for Esc key)
 chrome.runtime.onMessage.addListener((msg, sender) => {
   if (msg?.type === "tabOverview:switchBack" && sender.tab) {
-    // Switch back using the sender overview tab context
     switchBackToPreviousTab(sender.tab);
   }
 });
 
-// helper: schedule capture with a slight delay -----------------------
+/**
+ * Schedule a capture with a slight delay.
+ * @param {number} tabId - The tab ID to capture.
+ * @param {number} windowId - The window ID containing the tab.
+ * @param {number} [delay=250] - Delay in milliseconds.
+ */
 function scheduleCapture(tabId, windowId, delay = 250) {
   setTimeout(() => capture(tabId, windowId), delay);
 }
 
-/* -----------------------------------------------------------
-   Auto-close overview tab in the *current window* when user
-   activates another tab in that window. Allows one overview
-   per window to stay open.
------------------------------------------------------------ */
+// Auto-close overview tab in the current window when user activates another tab
 chrome.tabs.onActivated.addListener(async ({ tabId, windowId }) => {
   const overviewURL = chrome.runtime.getURL("overview.html");
-  // Find overview tab in this window only
   const [overviewTab] = await chrome.tabs.query({ url: overviewURL, windowId });
   if (overviewTab && overviewTab.id !== tabId) {
     chrome.tabs.remove(overviewTab.id).catch(() => {});
   }
 });
 
-// onFocusChanged -----------------------------------------------------
+// Capture active tab on window focus change
 chrome.windows.onFocusChanged.addListener(async (winId) => {
   if (winId === chrome.windows.WINDOW_ID_NONE) return;
   const [tab] = await chrome.tabs.query({ active: true, windowId: winId });
   if (tab) scheduleCapture(tab.id, winId);
 });
 
-// onUpdated – keep as is but call the helper
+// Debounced capture on tab update
 chrome.tabs.onUpdated.addListener((tabId, changeInfo, tab) => {
   if (changeInfo.status === "complete" && tab.active) {
-    scheduleCapture(tabId, tab.windowId);
+    clearTimeout(debounceTimers.get(tabId));
+    debounceTimers.set(
+      tabId,
+      setTimeout(() => {
+        captureWithBackoff(tabId, tab.windowId);
+        debounceTimers.delete(tabId);
+      }, 250)
+    );
   }
 });
