@@ -42,6 +42,33 @@ async function saveTempWhitelist() {
 }
 
 /**
+ * Clean up temporary whitelist by removing tabs that no longer exist.
+ */
+async function cleanupTempWhitelist() {
+  if (tempWhitelist.size === 0) return;
+
+  try {
+    const tabs = await chrome.tabs.query({});
+    const existingTabIds = new Set(tabs.map((tab) => tab.id));
+    const originalSize = tempWhitelist.size;
+
+    // Remove tab IDs that no longer exist
+    for (const tabId of tempWhitelist) {
+      if (!existingTabIds.has(tabId)) {
+        tempWhitelist.delete(tabId);
+      }
+    }
+
+    // Save if we removed any invalid entries
+    if (tempWhitelist.size !== originalSize) {
+      await saveTempWhitelist();
+    }
+  } catch (error) {
+    console.error("Error cleaning up temp whitelist:", error);
+  }
+}
+
+/**
  * Start or restart the auto-discard alarm.
  */
 function startAlarm() {
@@ -52,6 +79,10 @@ function startAlarm() {
 // Alarm handler: check all tabs for discard eligibility
 chrome.alarms.onAlarm.addListener(async (a) => {
   if (a.name !== "autoDiscard") return;
+
+  // Clean up stale tab IDs from temp whitelist periodically
+  await cleanupTempWhitelist();
+
   const tabs = await chrome.tabs.query({});
   tabs.forEach(maybeDiscard);
 });
@@ -110,9 +141,11 @@ chrome.runtime.onMessage.addListener((msg, _sender, reply) => {
       } else {
         tempWhitelist.add(msg.tabId);
       }
-      saveTempWhitelist();
-      reply({ tempWhitelisted: tempWhitelist.has(msg.tabId) });
-      break;
+      // Use async/await to ensure storage is saved before replying
+      saveTempWhitelist().then(() => {
+        reply({ tempWhitelisted: tempWhitelist.has(msg.tabId) });
+      });
+      return true; // keep port open for async reply
     case "getStatus":
       reply({
         paused,
@@ -128,5 +161,22 @@ chrome.runtime.onMessage.addListener((msg, _sender, reply) => {
   return true; // keep port open for async replies
 });
 
+// Service worker startup event
+chrome.runtime.onStartup.addListener(async () => {
+  await loadSettings();
+  await cleanupTempWhitelist();
+  startAlarm();
+});
+
+// Extension installation/update event
+chrome.runtime.onInstalled.addListener(async () => {
+  await loadSettings();
+  await cleanupTempWhitelist();
+  startAlarm();
+});
+
 // Initialize settings and start alarm
-loadSettings().then(startAlarm);
+loadSettings().then(async () => {
+  await cleanupTempWhitelist();
+  startAlarm();
+});
