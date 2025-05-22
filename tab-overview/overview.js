@@ -33,7 +33,7 @@
    * @param {Object} tab - Chrome tab object
    * @returns {HTMLDivElement} Card element
    */
-  const cards = tabs.map((tab) => {
+  function createCard(tab) {
     const card = document.createElement("div");
     card.className = "card";
     card.setAttribute("role", "listitem");
@@ -106,12 +106,81 @@
     card.dataset.url = (tab.url || "").toLowerCase();
 
     return card;
-  });
+  }
 
-  // Batch DOM updates with DocumentFragment
+  // Render all cards immediately with placeholders
+  const cards = [];
+  tabs.forEach((tab) => {
+    const card = document.createElement("div");
+    card.className = "card";
+    card.setAttribute("role", "listitem");
+    card.dataset.tabId = tab.id;
+
+    // Info bar
+    const info = document.createElement("div");
+    info.className = "info";
+    const closeBtn = document.createElement("div");
+    closeBtn.className = "close-btn";
+    closeBtn.innerHTML = `<svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="white" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M18 6 6 18"></path><path d="m6 6 12 12"></path></svg>`;
+    closeBtn.setAttribute("aria-label", "Close tab");
+    closeBtn.onclick = (e) => {
+      e.stopPropagation();
+      chrome.tabs.remove(tab.id);
+      card.remove();
+      chrome.storage.local.remove("thumb_" + tab.id);
+    };
+    info.appendChild(closeBtn);
+    if (tab.favIconUrl?.startsWith("http")) {
+      const icon = document.createElement("img");
+      icon.src = tab.favIconUrl;
+      icon.onerror = () => icon.remove();
+      info.appendChild(icon);
+    } else {
+      info.classList.add("no-icon");
+    }
+    const title = document.createElement("span");
+    title.textContent = tab.title || tab.url;
+    title.setAttribute("title", tab.title || tab.url);
+    info.appendChild(title);
+    card.appendChild(info);
+
+    // Placeholder thumbnail
+    const img = document.createElement("img");
+    img.className = "thumb";
+    const host = new URL(tab.url).hostname || "?";
+    img.alt = host;
+    img.style.objectFit = "cover";
+    img.style.background = "#333";
+    img.src =
+      "data:image/svg+xml;charset=utf-8," +
+      encodeURIComponent(
+        `<svg xmlns='http://www.w3.org/2000/svg' width='100%' height='100%' viewBox='0 0 400 250'><rect width='400' height='250' fill='%23333'/><text x='50%' y='50%' dominant-baseline='middle' text-anchor='middle' font-size='96' fill='%23999' font-family='system-ui, -apple-system, sans-serif'>${host[0].toUpperCase()}</text></svg>`
+      );
+    card.appendChild(img);
+
+    card.onclick = () => chrome.tabs.update(tab.id, { active: true });
+    card.dataset.title = (tab.title || "").toLowerCase();
+    card.dataset.url = (tab.url || "").toLowerCase();
+    cards.push(card);
+  });
+  // Batch append to DOM
   const frag = document.createDocumentFragment();
   cards.forEach((c) => frag.appendChild(c));
   grid.appendChild(frag);
+
+  // Now load thumbnails asynchronously and update cards as they arrive
+  (async () => {
+    const thumbKeys = tabs.map((t) => "thumb_" + t.id);
+    const thumbs = await chrome.storage.local.get(thumbKeys);
+    tabs.forEach((tab, i) => {
+      const thumbData = thumbs["thumb_" + tab.id];
+      const thumbSrc = thumbData?.data || thumbData;
+      if (thumbSrc) {
+        const img = cards[i].querySelector(".thumb");
+        if (img) img.src = thumbSrc;
+      }
+    });
+  })();
 
   /**
    * Get currently visible cards (not filtered out by search).
