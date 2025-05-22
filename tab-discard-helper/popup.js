@@ -67,16 +67,19 @@
     // Permanent Whitelist Button
     const permBtn = id("permToggle");
     const permIcon = id("permIcon");
+    const permIconMinus = id("permIconMinus");
     const permLabel = permBtn.querySelector(".btn-label");
     if (st.permanentlyWhitelisted) {
       permBtn.setAttribute("aria-label", "Remove from Permanent Whitelist");
       permBtn.setAttribute("title", "Remove from Permanent Whitelist");
-      permIcon.style.filter = "grayscale(0) brightness(0.7)";
-      permLabel.textContent = "Whitelist Tab";
+      permIcon.style.display = "none";
+      permIconMinus.style.display = "block";
+      permLabel.textContent = "Unwhitelist Tab";
     } else {
       permBtn.setAttribute("aria-label", "Add to Permanent Whitelist");
       permBtn.setAttribute("title", "Add to Permanent Whitelist");
-      permIcon.style.filter = "none";
+      permIcon.style.display = "block";
+      permIconMinus.style.display = "none";
       permLabel.textContent = "Whitelist Tab";
     }
     // Temporary Whitelist Button
@@ -116,19 +119,27 @@
     }
     show(
       st.paused
-        ? "Auto-discard is paused."
+        ? { text: "Auto-discard is paused.", paused: true }
         : st.tempWhitelisted
-        ? "This tab is protected until closed."
-        : ""
+        ? { text: "This tab is protected until closed.", paused: false }
+        : { text: "", paused: false }
     );
   }
 
   /**
    * Show a message in the info area.
-   * @param {string} text
+   * @param {string|object} text
    */
   function show(text) {
-    id("info").textContent = text;
+    const info = id("info");
+    if (typeof text === "object" && text.paused) {
+      info.textContent = text.text;
+      info.style.marginTop = "0.5rem";
+    } else {
+      info.textContent =
+        typeof text === "string" ? text : (text && text.text) || "";
+      info.style.marginTop = "0.1rem";
+    }
   }
   /**
    * Shorthand for getElementById.

@@ -172,7 +172,19 @@
           aria-label="Add to Permanent Whitelist"
           title="Add to Permanent Whitelist"
         >
-          <img id="permIcon" src="icons/shield-plus.svg" alt="" />
+          <!-- shield-plus is for whitelist, shield-minus is for unwhitelist -->
+          <img
+            id="permIcon"
+            src="icons/shield-plus.svg"
+            alt=""
+            style="display: block"
+          />
+          <img
+            id="permIconMinus"
+            src="icons/shield-minus.svg"
+            alt=""
+            style="display: none"
+          />
           <span class="btn-label">Whitelist Tab</span>
         </button>
         <button
@@ -185,13 +197,13 @@
             id="pauseIcon"
             src="icons/octagon-pause.svg"
             alt="Pause"
-            style="display: block; position: relative"
+            style="display: block; position: relative; margin: 0 auto"
           />
           <img
             id="resumeIcon"
             src="icons/circle-play.svg"
             alt="Resume"
-            style="display: none; position: absolute; top: 6px; left: 29px"
+            style="display: none; position: relative; margin: 0 auto"
           />
           <span class="btn-label" id="pauseLabel">Pause Auto Discard</span>
         </button>
