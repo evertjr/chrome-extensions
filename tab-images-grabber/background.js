@@ -90,3 +90,57 @@ chrome.tabs.onRemoved.addListener((tabId) => {
     delete galleryData[tabId];
   }
 });
+
+/* ---------- NEW: capture as soon as a tab becomes active ---------- */
+chrome.tabs.onActivated.addListener(({ tabId, windowId }) => {
+  scheduleCapture(tabId, windowId, 100);
+});
+
+/* ---------- NEW: second chance right after the tab finishes loading ---------- */
+chrome.tabs.onUpdated.addListener((tabId, changeInfo, tab) => {
+  if (changeInfo.status === "complete" && tab.active) {
+    captureWithBackoff(tabId, tab.windowId);
+  }
+});
+
+/* ---------- (optional) when a brand-new tab is opened and is immediately active ---------- */
+chrome.tabs.onCreated.addListener((tab) => {
+  if (tab.active && tab.id !== chrome.tabs.TAB_ID_NONE) {
+    scheduleCapture(tab.id, tab.windowId, 400);
+  }
+});
+
+// Debounce map to avoid duplicate captures
+const captureTimeouts = {};
+
+function scheduleCapture(tabId, windowId, delay) {
+  clearTimeout(captureTimeouts[tabId]);
+  captureTimeouts[tabId] = setTimeout(() => {
+    captureWithBackoff(tabId, windowId);
+  }, delay);
+}
+
+// Exponential backoff for capture retries
+function captureWithBackoff(tabId, windowId, attempt = 0) {
+  chrome.tabs.get(tabId, (tab) => {
+    if (chrome.runtime.lastError || !tab || !tab.active) return;
+    chrome.tabs.captureVisibleTab(
+      windowId,
+      { format: "jpeg", quality: 45 },
+      (dataUrl) => {
+        if (chrome.runtime.lastError || !dataUrl) {
+          if (attempt < 3) {
+            setTimeout(
+              () => captureWithBackoff(tabId, windowId, attempt + 1),
+              150 * (attempt + 1)
+            );
+          }
+          return;
+        }
+        const key = `thumb_${tabId}`;
+        const now = Date.now();
+        chrome.storage.local.set({ [key]: { dataUrl, timestamp: now } });
+      }
+    );
+  });
+}

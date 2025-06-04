@@ -2,9 +2,7 @@
 
 const THUMB_OPTS = { format: "jpeg", quality: 40 };
 const MAX_THUMBNAILS = 200;
-let userHasInteracted = false;
 const PREV_TAB_KEY = "tabOverview_prevTab";
-const debounceTimers = new Map();
 
 /**
  * Capture a thumbnail for the given tab and window.
@@ -12,7 +10,7 @@ const debounceTimers = new Map();
  * @param {number} windowId - The window ID containing the tab.
  */
 async function capture(tabId, windowId) {
-  if (!userHasInteracted || tabId === chrome.tabs.TAB_ID_NONE) return;
+  if (tabId === chrome.tabs.TAB_ID_NONE) return;
   let tabInfo;
   try {
     tabInfo = await chrome.tabs.get(tabId);
@@ -58,7 +56,7 @@ async function capture(tabId, windowId) {
  * @param {number} [attempt=0] - Current retry attempt.
  */
 async function captureWithBackoff(tabId, windowId, attempt = 0) {
-  if (!userHasInteracted || tabId === chrome.tabs.TAB_ID_NONE) return;
+  if (tabId === chrome.tabs.TAB_ID_NONE) return;
   let tabInfo;
   try {
     tabInfo = await chrome.tabs.get(tabId);
@@ -148,7 +146,6 @@ chrome.tabs.onRemoved.addListener((tabId) => {
  * Open (or focus) the Overview as a pinned tab. Captures the current tab before opening.
  */
 async function openOrFocusOverview() {
-  userHasInteracted = true;
   const [current] = await chrome.tabs.query({
     active: true,
     currentWindow: true,
@@ -257,16 +254,6 @@ chrome.runtime.onMessage.addListener((msg, sender) => {
   }
 });
 
-/**
- * Schedule a capture with a slight delay.
- * @param {number} tabId - The tab ID to capture.
- * @param {number} windowId - The window ID containing the tab.
- * @param {number} [delay=250] - Delay in milliseconds.
- */
-function scheduleCapture(tabId, windowId, delay = 250) {
-  setTimeout(() => capture(tabId, windowId), delay);
-}
-
 // Auto-close overview tab in the current window when user activates another tab
 chrome.tabs.onActivated.addListener(async ({ tabId, windowId }) => {
   const overviewURL = chrome.runtime.getURL("overview.html");
@@ -274,25 +261,33 @@ chrome.tabs.onActivated.addListener(async ({ tabId, windowId }) => {
   if (overviewTab && overviewTab.id !== tabId) {
     chrome.tabs.remove(overviewTab.id).catch(() => {});
   }
+  // Hold the worker alive for 100ms, then capture
+  return new Promise((resolve) => {
+    setTimeout(async () => {
+      await capture(tabId, windowId);
+      resolve();
+    }, 100);
+  });
 });
 
 // Capture active tab on window focus change
 chrome.windows.onFocusChanged.addListener(async (winId) => {
   if (winId === chrome.windows.WINDOW_ID_NONE) return;
   const [tab] = await chrome.tabs.query({ active: true, windowId: winId });
-  if (tab) scheduleCapture(tab.id, winId);
+  if (tab) {
+    return new Promise((resolve) => {
+      setTimeout(async () => {
+        await capture(tab.id, winId);
+        resolve();
+      }, 100);
+    });
+  }
 });
 
-// Debounced capture on tab update
-chrome.tabs.onUpdated.addListener((tabId, changeInfo, tab) => {
+// Capture on tab update (status complete)
+chrome.tabs.onUpdated.addListener(async (tabId, changeInfo, tab) => {
   if (changeInfo.status === "complete" && tab.active) {
-    clearTimeout(debounceTimers.get(tabId));
-    debounceTimers.set(
-      tabId,
-      setTimeout(() => {
-        captureWithBackoff(tabId, tab.windowId);
-        debounceTimers.delete(tabId);
-      }, 250)
-    );
+    await new Promise((r) => setTimeout(r, 50));
+    await captureWithBackoff(tabId, tab.windowId);
   }
 });

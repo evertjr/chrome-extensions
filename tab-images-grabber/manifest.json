@@ -3,7 +3,7 @@
   "name": "Images Grabber",
   "description": "Download all images (including lazy-loaded and canvas) from the current page",
   "version": "1.0",
-  "permissions": ["activeTab", "storage", "downloads", "scripting"],
+  "permissions": ["storage", "downloads", "scripting"],
   "host_permissions": ["<all_urls>"],
   "background": {
     "service_worker": "background.js"
