@@ -7,6 +7,33 @@ let paused = false; // true = nothing will be auto-discarded
 let tempWhitelist = new Set(); // Set<tabId>
 let permanentWhitelist = [];
 let isProcessing = false; // Prevent concurrent alarm processing
+let lastCleanupTime = 0; // Track when we last cleaned up the temp whitelist
+
+/** Helper: make a tab (non-)discardable at the browser level */
+async function setAutoDiscardable(tabId, canDiscard) {
+  try {
+    await chrome.tabs.update(tabId, { autoDiscardable: canDiscard });
+  } catch (e) {
+    // Tab may have gone, ignore.
+  }
+}
+
+/** Restore autoDiscardable flags for all protected tabs */
+async function restoreProtectionFlags() {
+  // Restore temporary whitelist flags
+  for (const id of tempWhitelist) {
+    setAutoDiscardable(id, false);
+  }
+
+  // Restore permanent whitelist flags
+  chrome.tabs.query({}).then((tabs) => {
+    for (const t of tabs) {
+      if (permanentWhitelist.some((p) => t.url.includes(p))) {
+        setAutoDiscardable(t.id, false);
+      }
+    }
+  });
+}
 
 /**
  * Check if a tab is whitelisted (paused, temp, or permanent).
@@ -27,6 +54,8 @@ function isWhitelisted(url, tabId) {
  */
 function maybeDiscard(tab) {
   if (tab.active) return;
+  // If the tab is explicitly marked non-discardable, honour it.
+  if (tab.autoDiscardable === false) return;
   if (!tab || tab.discarded || !tab.url || tab.url.startsWith("chrome")) return;
 
   // Double-check whitelist status before discarding
@@ -52,28 +81,24 @@ async function saveTempWhitelist() {
 
 /**
  * Clean up temporary whitelist by removing tabs that no longer exist.
+ * This function is more conservative to avoid false positives.
  */
 async function cleanupTempWhitelist() {
   if (tempWhitelist.size === 0) return;
 
   try {
-    // Get all tabs from all windows to ensure we don't miss any
-    const tabs = await chrome.tabs.query({});
-    const existingTabIds = new Set(tabs.map((tab) => tab.id));
     const originalSize = tempWhitelist.size;
     const toRemove = [];
 
-    // Check each tab ID individually to be extra sure
+    // Only check each tab ID individually using chrome.tabs.get
+    // This is more reliable than chrome.tabs.query which might miss discarded tabs
     for (const tabId of tempWhitelist) {
-      if (!existingTabIds.has(tabId)) {
-        // Double-check by trying to get the tab directly
-        try {
-          await chrome.tabs.get(tabId);
-          // If we get here, the tab exists, so don't remove it
-        } catch (tabError) {
-          // Tab doesn't exist, safe to remove
-          toRemove.push(tabId);
-        }
+      try {
+        await chrome.tabs.get(tabId);
+        // If we get here, the tab exists, so keep it
+      } catch (tabError) {
+        // Tab doesn't exist, safe to remove
+        toRemove.push(tabId);
       }
     }
 
@@ -87,7 +112,7 @@ async function cleanupTempWhitelist() {
       await saveTempWhitelist();
     }
   } catch (error) {
-    console.error("Error cleaning up temp whitelist:", error);
+    // Silently handle errors to avoid noise in logs
   }
 }
 
@@ -109,8 +134,13 @@ chrome.alarms.onAlarm.addListener(async (a) => {
     const tabs = await chrome.tabs.query({});
     tabs.forEach(maybeDiscard);
 
-    // Clean up stale tab IDs from temp whitelist AFTER discard logic
-    await cleanupTempWhitelist();
+    // Clean up stale tab IDs from temp whitelist less frequently (every 5 minutes)
+    // to reduce the chance of false positives
+    const now = Date.now();
+    if (now - lastCleanupTime > 5 * 60 * 1000) {
+      await cleanupTempWhitelist();
+      lastCleanupTime = now;
+    }
   } finally {
     isProcessing = false;
   }
@@ -120,6 +150,22 @@ chrome.alarms.onAlarm.addListener(async (a) => {
 chrome.tabs.onRemoved.addListener(async (tabId) => {
   tempWhitelist.delete(tabId);
   await saveTempWhitelist();
+  setAutoDiscardable(tabId, true); // might be stale but harmless
+});
+
+// Restore protection when tabs are updated (e.g., when restored from discard)
+chrome.tabs.onUpdated.addListener(async (tabId, changeInfo, tab) => {
+  // Only act when the tab is loading or complete (restored from discard)
+  if (changeInfo.status === "loading" || changeInfo.status === "complete") {
+    // Restore temporary protection if this tab is in the temp whitelist
+    if (tempWhitelist.has(tabId)) {
+      setAutoDiscardable(tabId, false);
+    }
+    // Restore permanent protection if this tab matches the permanent whitelist
+    if (tab.url && permanentWhitelist.some((p) => tab.url.includes(p))) {
+      setAutoDiscardable(tabId, false);
+    }
+  }
 });
 
 /**
@@ -165,25 +211,57 @@ chrome.runtime.onMessage.addListener((msg, _sender, reply) => {
       reply({ paused });
       break;
     case "toggleTempWhitelist":
-      if (tempWhitelist.has(msg.tabId)) {
-        tempWhitelist.delete(msg.tabId);
-      } else {
-        tempWhitelist.add(msg.tabId);
-      }
-      // Use async/await to ensure storage is saved before replying
-      saveTempWhitelist().then(() => {
-        reply({ tempWhitelisted: tempWhitelist.has(msg.tabId) });
-      });
+      // First verify the tab exists
+      chrome.tabs
+        .get(msg.tabId)
+        .then(() => {
+          if (tempWhitelist.has(msg.tabId)) {
+            tempWhitelist.delete(msg.tabId);
+            // Allow future discards
+            setAutoDiscardable(msg.tabId, true);
+          } else {
+            tempWhitelist.add(msg.tabId);
+            // Block all discards (ours or Chrome's)
+            setAutoDiscardable(msg.tabId, false);
+          }
+          // Use async/await to ensure storage is saved before replying
+          saveTempWhitelist().then(() => {
+            reply({ tempWhitelisted: tempWhitelist.has(msg.tabId) });
+          });
+        })
+        .catch(() => {
+          // Tab doesn't exist, remove from temp whitelist if present and report as not protected
+          tempWhitelist.delete(msg.tabId);
+          saveTempWhitelist();
+          reply({ tempWhitelisted: false });
+        });
       return true; // keep port open for async reply
     case "getStatus":
-      reply({
-        paused,
-        tempWhitelisted: tempWhitelist.has(msg.tabId),
-        permanentlyWhitelisted: permanentWhitelist.some((p) =>
-          msg.url.includes(p)
-        ),
-      });
-      break;
+      // Validate that the tab still exists before reporting its status
+      chrome.tabs
+        .get(msg.tabId)
+        .then(() => {
+          reply({
+            paused,
+            tempWhitelisted: tempWhitelist.has(msg.tabId),
+            permanentlyWhitelisted: permanentWhitelist.some((p) =>
+              msg.url.includes(p)
+            ),
+          });
+        })
+        .catch(() => {
+          // Tab doesn't exist, remove it from temp whitelist and report as not protected
+          tempWhitelist.delete(msg.tabId);
+          saveTempWhitelist();
+          reply({
+            paused,
+            tempWhitelisted: false,
+            permanentlyWhitelisted: permanentWhitelist.some((p) =>
+              msg.url.includes(p)
+            ),
+          });
+        });
+      return true; // keep port open for async reply
     default:
       break;
   }
@@ -194,6 +272,7 @@ chrome.runtime.onMessage.addListener((msg, _sender, reply) => {
 chrome.runtime.onStartup.addListener(async () => {
   await loadSettings();
   await cleanupTempWhitelist();
+  await restoreProtectionFlags();
   startAlarm();
 });
 
@@ -201,11 +280,13 @@ chrome.runtime.onStartup.addListener(async () => {
 chrome.runtime.onInstalled.addListener(async () => {
   await loadSettings();
   await cleanupTempWhitelist();
+  await restoreProtectionFlags();
   startAlarm();
 });
 
 // Initialize settings and start alarm
 loadSettings().then(async () => {
   await cleanupTempWhitelist();
+  await restoreProtectionFlags();
   startAlarm();
 });

@@ -1,5 +1,14 @@
 import { getLocalizedText } from "./i18n.js";
 
+/** Helper: make a tab (non-)discardable at the browser level */
+async function setAutoDiscardable(tabId, canDiscard) {
+  try {
+    await chrome.tabs.update(tabId, { autoDiscardable: canDiscard });
+  } catch (e) {
+    // Tab may have gone, ignore.
+  }
+}
+
 (async () => {
   // Get the active tab in the current window
   const [tab] = await chrome.tabs.query({ active: true, currentWindow: true });
@@ -34,6 +43,11 @@ import { getLocalizedText } from "./i18n.js";
       ? whitelist.filter((p) => p !== host && p !== url)
       : [...whitelist, host];
     await chrome.storage.sync.set({ whitelist: newList });
+    // Platform-level protection too
+    setAutoDiscardable(
+      tab.id,
+      /* canDiscard = */ isOn // was already whitelisted → now removing
+    );
     status = { ...status, permanentlyWhitelisted: !isOn };
     render(status);
   };
